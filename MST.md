@@ -1,5 +1,0 @@
-UPDATE 1: I successfully implemented a MST to represent the correlation between stocks. As per Mantegna's paper on a hiearchical structure in financial markets, the MST offers an ultrametric space that enables us to model the market as a hierarchical classification of assets. In day 2, I will look to shift from a static snapshot to a dynamic one. We will keep limiting ourselves to the 10 stocks listed. Day 1 passed the test on the metric space property (I have yet to check for ultrametric) 
-
-UPDATE 2: Decided to check for ultrametric instead on moving to dynamic. I had to change from distance matrix to a ultrametric distance matrix to be able to test that the graph respected those properties. I also went into making an analysis function for obtaining the properties of the trees and analysing them. 
-
-UPDATE 3: I decided to refactor to respect the single responsibility principle. I want to build up on the analysis, so this will enable minimal code refactoring. I got the data to analyse.

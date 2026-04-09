@@ -13,8 +13,12 @@ def assymetrical_correlation_matrix(returns):
     pd.DataFrame    An asymmetrical correlation matrix where the entry (i, j) represents the correlation of asset i leading asset j.   
     """
     standardized_returns = (returns - returns.mean()) / returns.std()
-    leader_returns = standardized_returns.shift(1)  # Shift to create leader-lagger relationship
-    asym_corr_matrix = leader_returns.T @ standardized_returns / (len(returns) - 1)
+    
+    leader_returns = standardized_returns.shift(1).dropna()  #shift and drop first row
+    standardized_returns = standardized_returns.loc[leader_returns.index]  #align the standardized returns with the shifted leader returns
+    
+    asym_corr_matrix = leader_returns.T @ standardized_returns / (len(leader_returns) - 1)
+    
     return asym_corr_matrix
 
 def marchenko_pastur_returns(correlation_matrix, N, T):
@@ -53,19 +57,19 @@ def marchenko_pastur_returns(correlation_matrix, N, T):
     """
 
     lambda_max = (1+np.sqrt(N/T))**2
-    eigenvalues, eigenvectors = np.linalg.eigh(correlation_matrix)
+    eigenvalues, eigenvectors = np.linalg.eig(correlation_matrix)
 
-    is_noise = eigenvalues < lambda_max
-    noise_mean = np.mean(eigenvalues[is_noise])
+    is_noise = np.real(eigenvalues) < lambda_max # Eig can be complex due to the assymetrical nature of the correlation matrix, we take the real part for comparison
+    noise_mean = np.mean(np.real(eigenvalues[is_noise]))
     eigenvalues_denoised = eigenvalues.copy()
     eigenvalues_denoised[is_noise] = noise_mean
 
     C_clean = eigenvectors @ np.diag(eigenvalues_denoised) @ eigenvectors.T
-
-    #KEEP IN CHECK FOR FUTURE FILTERING
-    np.fill_diagonal(C_clean, 0) # Set diagonal to 0 to avoid self-correlation
+    C_clean = np.real(C_clean)
+    # KEEP IN CHECK FOR FUTURE FILTERING (GLASSO)
+    np.fill_diagonal(C_clean, 0)  # Set diagonal to 0 to avoid loops
     
-    #convert back to DataFrame with proper index and columns
+    # Convert back to DataFrame with proper index and columns
     C_final_df = pd.DataFrame(C_clean, index=correlation_matrix.index, columns=correlation_matrix.columns)
 
     return C_final_df
