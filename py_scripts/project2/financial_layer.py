@@ -1,3 +1,4 @@
+from matplotlib.widgets import Lasso
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -73,3 +74,28 @@ def marchenko_pastur_returns(correlation_matrix, N, T):
     C_final_df = pd.DataFrame(C_clean, index=correlation_matrix.index, columns=correlation_matrix.columns)
 
     return C_final_df
+
+def var_lasso(correlation_matrix, alpha=0.01):
+    """
+    LLM GENERATED DOCSTRING, VERIFIED BY AUTHOR:
+    Applies VAR Lasso to the input correlation matrix to estimate a sparse inverse covariance matrix, which can be interpreted as a network of relationships between assets.
+    Parameters:
+    correlation_matrix : pd.DataFrame
+        A correlation matrix derived from financial returns, where rows and columns represent different assets.
+    alpha : float, optional
+        Regularization strength for the Lasso regression. Higher values lead to sparser solutions. Default is 0.01.
+    Returns:
+    pd.DataFrame
+        A DataFrame representing the sparse inverse covariance matrix (precision matrix) estimated by VAR Lasso, where non-zero entries indicate significant relationships between assets.
+    Notes:
+    - Given the crucial leader-lagger assymetry in financial data, the VAR Lasso is a powerful altnernative to the traditional graphical lasso.
+    """
+
+    # assym_precision_matrix = np.zeros((len(correlation_matrix), len(correlation_matrix)))
+
+    # model = Lasso(alpha=alpha)
+
+    
+
+    
+        

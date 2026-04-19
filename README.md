@@ -1,8 +1,36 @@
 # Network-Contagion-in-Financial-Markets
 
+This is an informal way for me to share my thoughts as I evolve through these projects. 
+An accurate README will be redacted later on.
+
 **Project 1:**
 Modeling Network Contagion in Equity Markets: Built a network-based model to analyze how shocks to one stock propagate through equities, identifying systemically important assets and measuring portfolio exposure. Applied correlation and Granger-causality networks, centrality metrics, and simulated contagion scenarios using Python and NetworkX.
 
-**Project 2:**
+UPDATE 1: I successfully implemented a MST to represent the correlation between stocks. As per Mantegna's paper on a hiearchical structure in financial markets, the MST offers an ultrametric space that enables us to model the market as a hierarchical classification of assets. In day 2, I will look to shift from a static snapshot to a dynamic one. We will keep limiting ourselves to the 10 stocks listed. Day 1 passed the test on the metric space property (I have yet to check for ultrametric) 
 
+UPDATE 2: Decided to check for ultrametric instead on moving to dynamic. I had to change from distance matrix to a ultrametric distance matrix to be able to test that the graph respected those properties. I also went into making an analysis function for obtaining the properties of the trees and analysing them. 
 
+UPDATE 3: I decided to refactor to respect the single responsibility principle. I want to build up on the analysis, so this will enable minimal code refactoring. I got the data to analyse.
+
+UPDATE 4: I looked at what signals I could analyze, they didn't seem to provide new information. It's like adding noise instead of lowering it. The MST tool doesn't seem to provide enough flexibility to offer a nuanced analysis of the market. I created a shock contagion function to see how it impacts the different stocks when one stock changes. I'm not too sure of the strength of the correlations, they seem to be derived from noise despite applying a Marchenko-Pastur Filter.
+
+UPDATE 5: 
+Brainstorming:
+https://www.sciencedirect.com/science/article/abs/pii/S0378437122008640
+I saw this article about how someone analyzed taxi rides to predict the price of real estate. From what I understand, they broke down cab users according to time of the day. I didn't read the full thing, but I figure they're trying to isolate the commuters to see where the meaningful repetitive flow of people goes to. This proxy-based forecasting would enable to predict the trends of real estate prices.
+
+How can we use multiple layer architecture and apply it to supply chains to predict manufacturing capabilities of companies.
+
+Looking deeper into the subject, I found the existence of Temporal Multiplex Directed Networks. 
+It's like if I took a graph with nodes and egdges, made that graph evolve through time and had different types of edges. This results in the layered architecture. 
+
+For the semiconductor industry, the layers I'm considering are: the underlying price, the ownership and the flow of revenue between companies. I considered patents relationships, but it's hard to obtain up to date info on that.
+
+PROJECT 2 - TMDN for Semiconductors
+
+UPDATE 1: Half of the financial layer done. I acquired the returns of a vast amount of stocks in different spheres of the semiconductor industry. Those will be the focus of our analysis. Then, I build a lead-lag correlation matrix from those assets. This results in an assymetrical matrix where rows are the stocks at time T and the columns are the stocks at time T+1. The resulting matrix showcases how the returns of one stock impacts the returns of another over 1 day. Then we reapply the Marchenko-Pastur filter and treat only the real part of the resulting complex eigen values. We then construct graphs from the resulting matrices. 
+I noticed that the graph is too dense. This is normal given that every stock is correlated to the other, but I found out about Graphical Lasso, a penalty method that allows us to transform the correlation matrix into a sparse precision one. It keeps only the conditionally dependent relationships (direct ones) reducing the others to 0.
+
+UPDATE 2: I tried applying Graphical Lasso and noticed that it dealt with symmetrical correlation matrices. I build an assymetrical leader-lag correlation matrix. Hence, I can either induce symmetry by averaging the two assymetrical entries, which would result in a loss of directionality. This implies a loss of the leader-lagger relationship wich is crucial for our model. Or I can apply a different method. I need something that keeps conditional dependent relations while filtering out independent ones on assymetrical correlation matrices. Also, I realized my sample to variable ratio was small (T/N of 2), which is bad for forming the correlation matrix. I figured out two options, either elongate the sample size to 152 days instead of 76 and put more weight on more recent ones or sample intraday prices and risk having intraday noise.
+
+UPDATE 3: I'm losing it (FISHER). No, but seriously, this stuff is getting more and more complex. I've done my research Sparse VAR and assuming it works, it seems like a great method for my assymetry problem. But now, I realized something: 76 days is an eternity. Market changes withing 2 weeks at times. I need to lower the number of days and increase the number of samples/day. The issue is that it leads to very noisy samples, I think a sweet spot would be every 3-4h to lower the noise while keeping some intraday movement. This T/N ratio being too low also made me realize that my project wouldn't be scalable. I'm alrdy struggling with 38 assets. Imagine extending it to 100... that's 10 000 relations for 7600 samples instead of 1 444 for 2,888 samples. To keep this up, I would need to scale the number of samples to a factor of 2 each time. At 100 assets, that means 200 days (almost a full trading year). I started thinking about it and I devised some kind of method: Cluster the assets, run VAR on them, then run VAR on the clusters. This would reduce the needed sample size to a proportion equivalent to the maximal size of the clusters. The issue is that running this strat loses information between stocks that have correlations that trenscend the average relation between clusters. E.G. AMAT and Intel might share a direct high corr. lead-lag relationship, but that would be masked if they are averaged in the equipment and foundry clusters by unrelated giants (like ASML and AMD). So, I thought abt instead of applying a larger lasso penalty intra cluster and a lesser one inter cluster. Or, I have to look on how my MP filter impacts the N. I can have 100 assets but if MP rules out 9500 of the potential 10 000 relations, then I'm left with 500 relations. Pretty much don't know where to go, this is a bit confusing, I'm gonna leave it 1 day of marinating and if I don't find a solution, I will just try smth and hopefully I understand better after.
