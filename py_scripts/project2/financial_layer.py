@@ -3,6 +3,16 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 
+def PCA(returns):
+    corr_matrix = returns.corr()
+    eigenvalues, eigenvectors = np.linalg.eig(corr_matrix)
+    idx = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[idx]
+    eigenvectors = eigenvectors[:, idx]
+    return eigenvalues, eigenvectors
+
+
+
 def assymetrical_correlation_matrix(returns):
     """LLM GENERATED DOCSTRING, VERIFIED BY AUTHOR:
     Computes the asymmetrical correlation matrix for a given DataFrame of returns. 
@@ -75,7 +85,7 @@ def marchenko_pastur_returns(correlation_matrix, N, T):
 
     return C_final_df
 
-def var_lasso(correlation_matrix, alpha=0.01):
+def var_lasso(assym_corr_matrix, alpha=0.01):
     """
     LLM GENERATED DOCSTRING, VERIFIED BY AUTHOR:
     Applies VAR Lasso to the input correlation matrix to estimate a sparse inverse covariance matrix, which can be interpreted as a network of relationships between assets.
@@ -90,10 +100,11 @@ def var_lasso(correlation_matrix, alpha=0.01):
     Notes:
     - Given the crucial leader-lagger assymetry in financial data, the VAR Lasso is a powerful altnernative to the traditional graphical lasso.
     """
+    def standardize(assym_corr_matrix):
+        standardized_matrix = (assym_corr_matrix - assym_corr_matrix.mean()) / assym_corr_matrix.std()
+        model =  Lasso(alpha=alpha, fit_intercept=False, max_iter=10000)
 
-    # assym_precision_matrix = np.zeros((len(correlation_matrix), len(correlation_matrix)))
 
-    # model = Lasso(alpha=alpha)
 
     
 
