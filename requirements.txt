@@ -3,3 +3,5 @@ pandas
 networkx
 yfinance
 matplotlib
+scikit-learn
+plotly
