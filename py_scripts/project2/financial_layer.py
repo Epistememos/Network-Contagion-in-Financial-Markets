@@ -231,6 +231,96 @@ def marchenko_pastur_returns(correlation_matrix, N, T):
 
     return C_final_df
 
+def har_x_lasso(log_vol, alpha=0.01):
+    """
+    HAR-X(d,w,m) volatility model with cross-asset Lasso regularization.
+
+    Supersedes var_lasso() for the volatility spillover layer. VAR(4) on
+    log-vol approximates long-memory persistence with 4 uniform lags, but vol
+    has well-documented multi-frequency structure (Corsi 2009): market
+    participants react to yesterday, last week, and last month of vol —
+    producing rough-fractional-integration dynamics that HAR captures with 3
+    parameters per pair instead of 4*N for VAR(4), making estimation more
+    efficient at N=27.
+
+    Model per target asset j:
+        σ_{j,t} = Σ_i [ β^d_{ij} σ_{i,t-1}
+                       + β^w_{ij} σ̄^w_{i,t}   (1/5 mean over t-5..t-1)
+                       + β^m_{ij} σ̄^m_{i,t} ] (1/22 mean over t-22..t-1)
+                + ε_{j,t}
+
+    Design matrix: [σ^d, σ^w, σ^m] for all N assets → 3N columns.
+    One Lasso per target j recovers β^d, β^w, β^m (N×N each). Cross-asset
+    terms i≠j are the spillover channels — this is the HAR-X extension
+    (Bollerslev et al.) applied jointly across a panel.
+
+    For FEVD compatibility, HAR(1,5,22) is converted to an equivalent VAR(22)
+    (Corsi et al. 2012):
+        A_1     = β^d + β^w/5 + β^m/22
+        A_{2..5}  = β^w/5 + β^m/22
+        A_{6..22} = β^m/22
+    This feeds directly into fevd_connectedness() unchanged.
+
+    Parameters
+    ----------
+    log_vol : pd.DataFrame
+        Standardized (zero-mean, unit-var) Parkinson log-volatility, time×assets.
+        Must already be standardized — do not pass raw log-vol.
+    alpha : float
+        Lasso L1 penalty; tune against the placebo test as with var_lasso.
+
+    Returns
+    -------
+    har_coefs : dict
+        {'d': B_d, 'w': B_w, 'm': B_m} — N×N DataFrames.
+        B_k.loc[i, j] = HAR-k coefficient of asset i predicting asset j.
+    var_rep : dict[int, pd.DataFrame]
+        Equivalent VAR(22) representation {1..22: A_l} for fevd_connectedness.
+    residuals : pd.DataFrame
+        In-sample HAR-X residuals, aligned to log_vol.index[22:].
+    """
+    names = log_vol.columns
+    N = len(names)
+
+    daily   = log_vol.shift(1)
+    weekly  = log_vol.rolling(5).mean().shift(1)   # mean(t-5..t-1)
+    monthly = log_vol.rolling(22).mean().shift(1)  # mean(t-22..t-1)
+
+    X_df = pd.concat([daily, weekly, monthly], axis=1)
+    X_df.columns = (
+        [f"d_{c}" for c in names]
+        + [f"w_{c}" for c in names]
+        + [f"m_{c}" for c in names]
+    )
+
+    valid  = X_df.index[X_df.notna().all(axis=1)]
+    X_vals = X_df.loc[valid].values
+    Y_vals = log_vol.loc[valid].values
+
+    coefs = np.zeros((3 * N, N))
+    for j in range(N):
+        model = Lasso(alpha=alpha, fit_intercept=False, max_iter=10000)
+        model.fit(X_vals, Y_vals[:, j])
+        coefs[:, j] = model.coef_
+
+    Bd = pd.DataFrame(coefs[:N],        index=names, columns=names)
+    Bw = pd.DataFrame(coefs[N:2 * N],   index=names, columns=names)
+    Bm = pd.DataFrame(coefs[2 * N:],    index=names, columns=names)
+    har_coefs = {'d': Bd, 'w': Bw, 'm': Bm}
+
+    # HAR(1,5,22) → VAR(22) for fevd_connectedness()
+    bw5  = Bw / 5
+    bm22 = Bm / 22
+    var_rep = {1: Bd + bw5 + bm22}
+    for l in range(2, 6):
+        var_rep[l] = (bw5 + bm22).copy()
+    for l in range(6, 23):
+        var_rep[l] = bm22.copy()
+
+    residuals = pd.DataFrame(Y_vals - X_vals @ coefs, index=valid, columns=names)
+    return har_coefs, var_rep, residuals
+
+
 def var_lasso(returns, alpha=0.01, n_lags=1, exclude_cross_session=True):
     """
     Sparse VAR(p) via per-asset Lasso regressions — NOT Graphical Lasso.
