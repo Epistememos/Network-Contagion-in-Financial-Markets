@@ -127,13 +127,13 @@ def remove_market_mode(returns, n_modes=1):
     residuals : pd.DataFrame
         Standardized residual returns with the top n_modes removed.
     factors : pd.DataFrame
-        Time series of the removed factor(s), one column per mode — keep these
+        Time series of the removed factor(s), one column per mode - keep these
         for the systematic layer.
     """
     standardized = (returns - returns.mean()) / returns.std()
     corr = standardized.corr().values
     eigenvalues, eigenvectors = np.linalg.eigh(corr)
-    top = eigenvectors[:, ::-1][:, :n_modes]  # eigh sorts ascending — take the largest
+    top = eigenvectors[:, ::-1][:, :n_modes]  # eigh sorts ascending - take the largest
 
     Z = standardized.values
     F = Z @ top                    # factor time series (T x n_modes)
@@ -216,7 +216,7 @@ def marchenko_pastur_returns(correlation_matrix, N, T):
         # V.T reconstruction is invalid and eigenvalues are complex. Use SVD
         # instead. Under the null, an N x N lead-lag correlation matrix has
         # i.i.d. entries of variance 1/T, and its largest singular value
-        # converges to 2*sqrt(N/T) (quarter-circle law) — singular values
+        # converges to 2*sqrt(N/T) (quarter-circle law) - singular values
         # below that bound are indistinguishable from noise and are truncated.
         s_max = 2 * np.sqrt(N / T)
         U, s, Vt = np.linalg.svd(C)
@@ -238,8 +238,7 @@ def har_x_lasso(log_vol, alpha=0.01):
     Supersedes var_lasso() for the volatility spillover layer. VAR(4) on
     log-vol approximates long-memory persistence with 4 uniform lags, but vol
     has well-documented multi-frequency structure (Corsi 2009): market
-    participants react to yesterday, last week, and last month of vol —
-    producing rough-fractional-integration dynamics that HAR captures with 3
+    participants react to yesterday, last week, and last month of vol - producing rough-fractional-integration dynamics that HAR captures with 3
     parameters per pair instead of 4*N for VAR(4), making estimation more
     efficient at N=27.
 
@@ -251,7 +250,7 @@ def har_x_lasso(log_vol, alpha=0.01):
 
     Design matrix: [σ^d, σ^w, σ^m] for all N assets → 3N columns.
     One Lasso per target j recovers β^d, β^w, β^m (N×N each). Cross-asset
-    terms i≠j are the spillover channels — this is the HAR-X extension
+    terms i≠j are the spillover channels - this is the HAR-X extension
     (Bollerslev et al.) applied jointly across a panel.
 
     For FEVD compatibility, HAR(1,5,22) is converted to an equivalent VAR(22)
@@ -265,14 +264,14 @@ def har_x_lasso(log_vol, alpha=0.01):
     ----------
     log_vol : pd.DataFrame
         Standardized (zero-mean, unit-var) Parkinson log-volatility, time×assets.
-        Must already be standardized — do not pass raw log-vol.
+        Must already be standardized - do not pass raw log-vol.
     alpha : float
         Lasso L1 penalty; tune against the placebo test as with var_lasso.
 
     Returns
     -------
     har_coefs : dict
-        {'d': B_d, 'w': B_w, 'm': B_m} — N×N DataFrames.
+        {'d': B_d, 'w': B_w, 'm': B_m} - N×N DataFrames.
         B_k.loc[i, j] = HAR-k coefficient of asset i predicting asset j.
     var_rep : dict[int, pd.DataFrame]
         Equivalent VAR(22) representation {1..22: A_l} for fevd_connectedness.
@@ -323,7 +322,7 @@ def har_x_lasso(log_vol, alpha=0.01):
 
 def var_lasso(returns, alpha=0.01, n_lags=1, exclude_cross_session=True):
     """
-    Sparse VAR(p) via per-asset Lasso regressions — NOT Graphical Lasso.
+    Sparse VAR(p) via per-asset Lasso regressions - NOT Graphical Lasso.
 
     Fits X(t) = sum_{L=1..p} A_L^T X(t-L) + eps with an L1 penalty by running
     one Lasso regression per target asset: regress asset j at t on ALL assets
@@ -334,26 +333,25 @@ def var_lasso(returns, alpha=0.01, n_lags=1, exclude_cross_session=True):
 
     Fitting all lags jointly (rather than one shifted correlation per lag)
     means each A_L captures the *marginal* predictive content of lag L,
-    controlling for the other lags — the multivariate analogue of partial
+    controlling for the other lags - the multivariate analogue of partial
     autocorrelation.
 
     Parameters
     ----------
     returns : pd.DataFrame
         (Residualized) asset returns, time on rows, assets on columns.
-        Fit on returns directly — not on a correlation matrix.
+        Fit on returns directly - not on a correlation matrix.
     alpha : float, optional
         L1 regularization strength; higher values give a sparser graph.
     n_lags : int, optional
-        VAR order p — how many hourly lags of every asset enter the regression.
+        VAR order p - how many hourly lags of every asset enter the regression.
     exclude_cross_session : bool, optional
         If True, keep only targets whose full lag stack lies within the same
         trading session (same calendar date), so no lead-lag edge spans an
         overnight/weekend gap. Only applies to intraday data (multiple bars
-        per calendar date) — at daily or lower frequency every bar is its own
+        per calendar date) - at daily or lower frequency every bar is its own
         date and the filter is skipped automatically. NOTE: with B intraday
-        bars per session this leaves (B - n_lags) usable targets per day —
-        check you retain more samples than the N * n_lags predictors.
+        bars per session this leaves (B - n_lags) usable targets per day - check you retain more samples than the N * n_lags predictors.
 
     Returns
     -------
@@ -375,7 +373,7 @@ def var_lasso(returns, alpha=0.01, n_lags=1, exclude_cross_session=True):
     if exclude_cross_session and isinstance(returns.index, pd.DatetimeIndex):
         all_dates = np.asarray(returns.index.date)
         is_intraday = len(np.unique(all_dates)) < len(all_dates)
-        if is_intraday:  # at daily+ frequency every bar is its own session — nothing to exclude
+        if is_intraday:  # at daily+ frequency every bar is its own session - nothing to exclude
             target_dates = np.asarray(Y.index.date)
             oldest_lag_dates = np.asarray(lag_blocks[-1].index.date)  # t - p
             same_session = target_dates == oldest_lag_dates
@@ -384,7 +382,7 @@ def var_lasso(returns, alpha=0.01, n_lags=1, exclude_cross_session=True):
     n_samples, n_predictors = X_vals.shape
     if n_samples < n_predictors:
         print(f"var_lasso warning: {n_samples} samples < {n_predictors} predictors "
-              f"(N={N}, p={n_lags}) — Lasso still fits, but consider a longer "
+              f"(N={N}, p={n_lags}) - Lasso still fits, but consider a longer "
               f"window or fewer lags for stability.")
 
     coefs = np.zeros((n_predictors, N))
