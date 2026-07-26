@@ -137,6 +137,16 @@ New function: `har_x_lasso()` in `financial_layer.py`. Walk-forward validation u
 - OOS R² delta (HAR-X cross-asset − HAR-AR own-lags) is **negative at every α**, full-sample, worsening as α grows (α=0.10 → −6.3%). Per-window breakdown still shows HAR-X beating HAR-AR in specific regimes (e.g. +2.6pp at the 2026-05-08 window), but those gains don't survive full-sample averaging.
 - Conclusion: the *network structure* (who transmits to whom) is a robust, real feature of the vol data - but as a pure forecasting tool, cross-asset complexity isn't paying for itself over the full sample. The FEVD connectedness network should be framed as a risk-mapping tool, not sold on OOS R² alone. α=0.05 remains a defensible, non-cherry-picked operating point.
 
+### 2026-07-25 - Second TMDN layer: supply chain (structural cross-check)
+
+Added `py_scripts/project2/supply_chain_layer.py` - the second layer of the multiplex network, alongside the financial layer. Purpose: check whether the data-driven financial layer's top edges have a plausible economic rationale, or are noise that happened to survive the placebo test.
+
+**Two views, because direct edges alone miss the peer clusters the financial layer found:**
+- **Direct edges**: front-end equipment (ASML/AMAT/LRCX/KLAC/TOELY) → fab operators, EDA (CDNS/SNPS) → chip designers, back-end test (TER) → chip designers, contract foundries (TSM/UMC/GFS) → fabless customers, OSAT (ASX/AMKR) → chip companies.
+- **Shared-customer co-exposure** (`shared_customer_overlap()`): AMAT and LRCX never sell to each other, and CDNS/SNPS are competitors rather than customer/supplier - yet both pairs are top edges in the vol-spillover network. The mechanism is indirect: they sell to the *same* customers, so they share exposure to the same capex/demand cycle. This bipartite-projection view is the one that actually explains those clusters; direct edges alone would show them as disconnected.
+
+**Sourcing caveat (important, flagged after the user asked how edges were determined):** the edges are built from general semiconductor industry-structure knowledge - company segment classification (foundry/fabless/IDM/equipment/EDA/OSAT) and typical customer relationships within those categories - **not from individual 10-K filings read and cited during this pass**. No licensed supply-chain feed and no per-edge source citation exist yet. The original notebook/docstring wording ("hand-curated from public 10-K business descriptions") overclaimed this and was corrected. **Planned follow-up: scrape and verify each edge against SEC EDGAR 10-K business-description and customer-concentration disclosures**, so every edge is backed by a citable filing instead of general knowledge. Until then, treat this layer as a coarse qualitative prior, unweighted by revenue share - useful for sanity-checking, not for citing as sourced data.
+
 ---
 
 ## Standing Methodological Decisions
@@ -152,3 +162,4 @@ New function: `har_x_lasso()` in `financial_layer.py`. Walk-forward validation u
 | HAR-X instead of VAR(4) for vol | Parsimonious 3-param-per-pair capture of vol's multi-frequency long-memory structure |
 | Sensitivity-grid every operating point before trusting it | Confirms structure (edges, connectedness) isn't a tuning artifact; separately reveals whether forecast-lift claims survive full-sample averaging |
 | Present the FEVD network as risk-mapping, not forecasting | Cross-asset HAR-X underperforms own-lags HAR-AR full-sample at every α tested; edge structure is robust but doesn't imply OOS forecast improvement |
+| Flag unsourced/unverified claims explicitly rather than implying rigor | Supply-chain edges were initially described as "hand-curated from 10-Ks" when they were actually general industry knowledge; correct the wording as soon as the gap is identified rather than leaving it implied |

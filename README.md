@@ -26,8 +26,9 @@ The financial layer is estimated with a pipeline of:
 3. **HAR-X with Lasso** - Heterogeneous AutoRegression with cross-asset terms: each asset's vol is regressed on all other assets' daily (t-1), weekly (5-day avg), and monthly (22-day avg) volatility components, with Lasso selecting which cross-asset channels survive. Three parameters per pair capture vol's long-memory multi-frequency structure more efficiently than VAR(p). (*not* Graphical Lasso, which is symmetric and destroys directionality)
 4. **Generalized FEVD connectedness** - HAR(1,5,22) is converted to an equivalent VAR(22) for the Diebold–Yilmaz FEVD; θ(i,j) = share of asset i's 10-day forecast-error variance attributable to shocks from j
 5. **Placebo testing** - every candidate network must beat a time-shuffled control and show positive out-of-sample R², or it is treated as noise
+6. **Supply-chain cross-check** - a hand-curated industry adjacency (direct customer/supplier edges + shared-customer co-exposure) checks whether the financial layer's top edges have a plausible economic rationale, or are noise that happened to survive the placebo test
 
-Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_layer.py), notebook: [`notebooks/TMDN.ipynb`](notebooks/TMDN.ipynb)
+Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_layer.py), [`py_scripts/project2/supply_chain_layer.py`](py_scripts/project2/supply_chain_layer.py); notebook: [`notebooks/TMDN.ipynb`](notebooks/TMDN.ipynb)
 
 ## Key findings so far
 
@@ -40,7 +41,9 @@ Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_l
 - Structure the math had no way of knowing: the EDA duopoly (Cadence ↔ Synopsys) as the strongest edge, a tight AMAT–LRCX–KLAC equipment cluster, STM → Infineon, and a total connectedness index that peaked (89.5%) in the December 2022 semi bear market
 - Net vol **transmitters** (STM, AMAT, ASX, TER) sit upstream in the supply chain; net **receivers** include INTC and TOELY
 
-The volatility spillover network is the working financial layer of the TMDN; ownership and supply-chain layers are future work.
+**A second layer - supply chain - now exists as a structural cross-check.** `supply_chain_layer.py` encodes the semiconductor industry's known structure (equipment → fab, EDA/test → chip designer, foundry → fabless customer, OSAT → chip company) plus a shared-customer co-exposure view, which explains peer clusters that direct edges miss (AMAT-LRCX-KLAC don't sell to each other; CDNS/SNPS are competitors, not customer/supplier - both pairs move together because they share the same customers). **Caveat:** this layer is currently built from general industry-structure knowledge, not from individually-cited 10-K filings - scraping and verifying each edge against SEC EDGAR filings is planned follow-up work, not yet done. Ownership (13F) remains future work.
+
+The volatility spillover network is the working financial layer of the TMDN.
 
 ## Repository structure
 
@@ -53,10 +56,13 @@ The volatility spillover network is the working financial layer of the TMDN; own
 ├── py_scripts/
 │   ├── project1/        # mst.py, analysis.py, contagion.py
 │   └── project2/
-│       └── financial_layer.py   # PCA, market-mode removal, asymmetric lead-lag,
-│                                #   MP/SVD denoising, har_x_lasso (HAR-X),
-│                                #   var_lasso (Sparse VAR(p)),
-│                                #   parkinson_log_vol, fevd_connectedness
+│       ├── financial_layer.py   # PCA, market-mode removal, asymmetric lead-lag,
+│       │                        #   MP/SVD denoising, har_x_lasso (HAR-X),
+│       │                        #   var_lasso (Sparse VAR(p)),
+│       │                        #   parkinson_log_vol, fevd_connectedness
+│       └── supply_chain_layer.py # hand-curated industry adjacency (direct edges
+│                                #   + shared-customer co-exposure); TODO: verify
+│                                #   each edge against SEC EDGAR 10-K filings
 ├── data/                # MST support utilities
 ├── src/                 # entry-point script (Project 1)
 ├── tests/               # test code
