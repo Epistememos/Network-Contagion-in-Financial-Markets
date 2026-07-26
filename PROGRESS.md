@@ -147,6 +147,23 @@ Added `py_scripts/project2/supply_chain_layer.py` - the second layer of the mult
 
 **Sourcing caveat (important, flagged after the user asked how edges were determined):** the edges are built from general semiconductor industry-structure knowledge - company segment classification (foundry/fabless/IDM/equipment/EDA/OSAT) and typical customer relationships within those categories - **not from individual 10-K filings read and cited during this pass**. No licensed supply-chain feed and no per-edge source citation exist yet. The original notebook/docstring wording ("hand-curated from public 10-K business descriptions") overclaimed this and was corrected. **Planned follow-up: scrape and verify each edge against SEC EDGAR 10-K business-description and customer-concentration disclosures**, so every edge is backed by a citable filing instead of general knowledge. Until then, treat this layer as a coarse qualitative prior, unweighted by revenue share - useful for sanity-checking, not for citing as sourced data.
 
+### 2026-07-25 - Unit tests for the original financial_layer.py functions
+
+Added `tests/test_financial_layer.py` (pytest, 22 tests) covering the module's original functions: `PCA`, `parkinson_log_vol`, `remove_market_mode`, `assymetrical_correlation_matrix`, `marchenko_pastur_returns`, `var_lasso`, `fevd_connectedness`. Each test targets a genuine mathematical invariant (eigenvectors orthonormal, FEVD rows sum to 1, projection removes the market mode exactly, diagonal zeroed after MP denoising) rather than re-deriving the function's own arithmetic. `pytest` added to `requirements.txt`.
+
+One test initially failed: checking that zero VAR coefficients + diagonal residual covariance produces an identity FEVD table used too tight a tolerance against the function's *empirical* `np.cov`, which is never exactly diagonal at finite sample size. Fixed by using a much larger synthetic sample (200,000 rows) and a realistic tolerance instead of a false theoretical (population-covariance) expectation.
+
+### 2026-07-25 - Financial layer robustness summary (notebook), executed end-to-end for real numbers
+
+Ran the full `TMDN.ipynb` pipeline via headless `jupyter nbconvert --execute` (installed `nbconvert`/`ipykernel` into the venv) rather than working from stale embedded outputs, to get a genuinely fresh run with a real timestamp and data vintage. Confirmed network access (yfinance) works in this environment; data now spans 2021-11-02 to 2026-07-24.
+
+Added two new markdown+code sections to the notebook, split by scope after review feedback (robustness content was initially dumped as one block at the very end, mixing financial-layer-only findings with supply-chain findings):
+
+- **"Financial Layer Robustness Summary"** - placed right after the sensitivity-grid section (still part of the financial layer proper, before the Supply Chain Layer section). Covers: (1) the return placebo margin is more decisive than "≈1" - the real network has *fewer* edges than shuffled noise at every α (ratio 0.96-0.98), OOS R² -0.14 to -0.72; (2) the vol-layer OOS R² delta degrades *monotonically* with α (-0.0127 at α=0.02 down to -0.0635 at α=0.10) - α=0.02 actually forecasts better than the chosen α=0.05, though the operating point was chosen for other documented reasons; (3) explicitly flags that no formal placebo-shuffle test has been run on the volatility/HAR-X layer itself, only on returns - the vol layer's validity currently rests on OOS R² + sensitivity, not a placebo test, and log-vol's high autocorrelation (≈0.40) means a naive i.i.d.-shuffle placebo would need real thought before it says anything.
+- **"Supply-Chain Rationale & Overall Verdict"** - placed right after the supply-chain rationale-check cell, at the very end. Of the latest window's top-15 vol-spillover edges: 11/15 (73%) have *some* documented rationale, but only 2/15 (13%) are *direct* customer/supplier edges (LRCX→MU, AMAT→MU) - the dominant explanatory mechanism is shared-customer co-exposure, not direct commercial linkage. 4/15 edges (STM↔IFNNY, MCHP→ON, NXPI→TXN) have no rationale under either view - flagged as open cases (either a missing "shared end-market" channel, e.g. STM/Infineon both serve automotive/power, or genuine false positives).
+
+Both sections include a run-timestamp/data-span code cell (`pd.Timestamp.now()`, `total_returns`/`log_vol` index bounds) so the numbers are tied to a known, reproducible data vintage rather than presented as timeless.
+
 ---
 
 ## Standing Methodological Decisions
@@ -163,3 +180,6 @@ Added `py_scripts/project2/supply_chain_layer.py` - the second layer of the mult
 | Sensitivity-grid every operating point before trusting it | Confirms structure (edges, connectedness) isn't a tuning artifact; separately reveals whether forecast-lift claims survive full-sample averaging |
 | Present the FEVD network as risk-mapping, not forecasting | Cross-asset HAR-X underperforms own-lags HAR-AR full-sample at every α tested; edge structure is robust but doesn't imply OOS forecast improvement |
 | Flag unsourced/unverified claims explicitly rather than implying rigor | Supply-chain edges were initially described as "hand-curated from 10-Ks" when they were actually general industry knowledge; correct the wording as soon as the gap is identified rather than leaving it implied |
+| Test genuine mathematical invariants, not the function's own arithmetic | Unit tests re-deriving a function's formula via a different code path (e.g. manual leader-lagger loop) catch real regressions; re-checking the same matrix multiply the function already does would not |
+| Stamp notebook analysis with an execution timestamp and data vintage | Numbers presented without a date/data-range are unreproducible and easy to mistake for current when they're actually stale embedded outputs |
+| Group robustness analysis by the layer it evaluates, not by when it was written | A single end-of-notebook "robustness summary" mixing financial-layer-only and supply-chain findings reads as one blob; readers need financial-layer conclusions right after the financial layer, before a second layer's evidence is introduced |

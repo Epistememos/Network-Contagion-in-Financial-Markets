@@ -36,7 +36,7 @@ Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_l
 
 **Volatility spillovers are alive and economically coherent.** Following Diebold–Yilmaz (2012), a **HAR-X** model (Corsi 2009) applied to daily **Parkinson (range-based) log-volatility** - strongly persistent (lag-1 autocorrelation ≈ 0.40 vs ≈ 0 for returns) - produces:
 
-- Positive walk-forward out-of-sample R² (+0.31 full sample) for the HAR-AR own-lags benchmark; HAR-X cross-asset model adds lift in several windows
+- Positive walk-forward out-of-sample R² (+0.35 full sample, as of the 2026-07-25 run) for the HAR-AR own-lags benchmark; HAR-X cross-asset model adds lift in some sub-windows but not full-sample (see Robustness below)
 - A rolling **generalized-FEVD connectedness network**: θ(i, j) = share of asset *i*'s 10-day forecast-error variance attributable to shocks from asset *j*
 - Structure the math had no way of knowing: the EDA duopoly (Cadence ↔ Synopsys) as the strongest edge, a tight AMAT–LRCX–KLAC equipment cluster, STM → Infineon, and a total connectedness index that peaked (89.5%) in the December 2022 semi bear market
 - Net vol **transmitters** (STM, AMAT, ASX, TER) sit upstream in the supply chain; net **receivers** include INTC and TOELY
@@ -44,6 +44,15 @@ Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_l
 **A second layer - supply chain - now exists as a structural cross-check.** `supply_chain_layer.py` encodes the semiconductor industry's known structure (equipment → fab, EDA/test → chip designer, foundry → fabless customer, OSAT → chip company) plus a shared-customer co-exposure view, which explains peer clusters that direct edges miss (AMAT-LRCX-KLAC don't sell to each other; CDNS/SNPS are competitors, not customer/supplier - both pairs move together because they share the same customers). **Caveat:** this layer is currently built from general industry-structure knowledge, not from individually-cited 10-K filings - scraping and verifying each edge against SEC EDGAR filings is planned follow-up work, not yet done. Ownership (13F) remains future work.
 
 The volatility spillover network is the working financial layer of the TMDN.
+
+### Robustness (as of the 2026-07-25 run, data through 2026-07-24)
+
+Three independent checks, documented in full in the notebook's "Financial Layer Robustness Summary" and "Supply-Chain Rationale & Overall Verdict" sections:
+
+- **Return null result is decisive, not marginal.** Placebo edge ratio 0.96-0.98 across α ∈ {0.01, 0.02, 0.03, 0.05} - the real return network has *fewer* surviving edges than shuffled noise at every regularization level, plus OOS R² of -0.14 to -0.72.
+- **Vol-layer structure survives a 4×3 hyperparameter grid** (α × FEVD horizon): 9-10/10 top-edge overlap and connectedness confined to 84.0-84.8% everywhere. But the OOS R² delta (HAR-X cross-asset vs. HAR-AR own-lags) is negative at *every* configuration and degrades monotonically with α - the layer adds no forecast lift and should be read as risk-mapping, not prediction.
+- **Supply-chain economic plausibility: 73% hit rate, but indirect.** Of the top-15 vol-spillover edges, 11/15 have a documented rationale, but only 2/15 are direct customer/supplier links - the dominant mechanism is shared-customer co-exposure (peer clusters exposed to the same capex/demand cycle), not commercial linkage. 4/15 edges have no rationale under either view.
+- **Known gap:** no formal placebo-shuffle test has been run on the volatility layer itself, only on returns - flagged explicitly rather than left implied.
 
 ## Repository structure
 
@@ -65,7 +74,7 @@ The volatility spillover network is the working financial layer of the TMDN.
 │                                #   each edge against SEC EDGAR 10-K filings
 ├── data/                # MST support utilities
 ├── src/                 # entry-point script (Project 1)
-├── tests/               # test code
+├── tests/               # test_financial_layer.py (pytest, 22 tests on financial_layer.py)
 └── PROGRESS.md          # full research log: decisions, pivots, null results, methodology
 ```
 
@@ -97,7 +106,13 @@ pip install --index-url https://pypi.org/simple -r requirements.txt
 Verify:
 
 ```bash
-python -c "import numpy, pandas, networkx, yfinance, matplotlib, sklearn, plotly; print('OK')"
+python -c "import numpy, pandas, networkx, yfinance, matplotlib, sklearn, plotly, pytest; print('OK')"
+```
+
+Run the unit tests:
+
+```bash
+pytest tests/
 ```
 
 ## Running
