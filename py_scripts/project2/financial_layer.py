@@ -320,6 +320,40 @@ def har_x_lasso(log_vol, alpha=0.01):
     return har_coefs, var_rep, residuals
 
 
+def circular_shift_placebo(panel, rng):
+    """
+    Circular-shift each column by an independent random offset.
+
+    The correct placebo control for an *autocorrelated* panel (e.g. log-vol,
+    lag-1 autocorrelation ~0.4). A plain i.i.d. row shuffle would destroy each
+    series' own persistence, so any model that exploits autocorrelation beats it
+    trivially and the test proves nothing. A per-column circular shift instead
+    PRESERVES each series' own autocorrelation (and marginal distribution) while
+    destroying the cross-asset temporal alignment - which is exactly, and only,
+    what a cross-asset spillover network claims to capture. If the real network's
+    cross-asset structure survives this control, it is not an artifact of each
+    series being individually persistent.
+
+    Parameters
+    ----------
+    panel : pd.DataFrame
+        Time x assets (e.g. standardized log-volatility).
+    rng : np.random.Generator
+        Source of the per-column offsets (pass one in for reproducibility).
+
+    Returns
+    -------
+    pd.DataFrame
+        Same shape/index/columns as `panel`, each column independently rolled.
+    """
+    T = len(panel)
+    shifted = np.empty_like(panel.values)
+    for j in range(panel.shape[1]):
+        offset = int(rng.integers(1, T))  # avoid the no-op zero shift
+        shifted[:, j] = np.roll(panel.values[:, j], offset)
+    return pd.DataFrame(shifted, index=panel.index, columns=panel.columns)
+
+
 def var_lasso(returns, alpha=0.01, n_lags=1, exclude_cross_session=True):
     """
     Sparse VAR(p) via per-asset Lasso regressions - NOT Graphical Lasso.

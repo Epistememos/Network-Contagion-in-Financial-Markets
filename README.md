@@ -25,10 +25,11 @@ The financial layer is estimated with a pipeline of:
 2. **Market-mode residualization** - the top eigenmode (~50–65% of variance) is projected out and kept as its own systematic layer; lead-lag structure is estimated on the idiosyncratic residuals
 3. **HAR-X with Lasso** - Heterogeneous AutoRegression with cross-asset terms: each asset's vol is regressed on all other assets' daily (t-1), weekly (5-day avg), and monthly (22-day avg) volatility components, with Lasso selecting which cross-asset channels survive. Three parameters per pair capture vol's long-memory multi-frequency structure more efficiently than VAR(p). (*not* Graphical Lasso, which is symmetric and destroys directionality)
 4. **Generalized FEVD connectedness** - HAR(1,5,22) is converted to an equivalent VAR(22) for the Diebold–Yilmaz FEVD; θ(i,j) = share of asset i's 10-day forecast-error variance attributable to shocks from j
-5. **Placebo testing** - every candidate network must beat a time-shuffled control and show positive out-of-sample R², or it is treated as noise
+5. **Placebo testing** - returns are gated with an i.i.d. time-shuffle; the volatility layer uses a **per-asset circular-shift** placebo (preserves each series' own autocorrelation, destroys cross-asset alignment) since an i.i.d. shuffle is invalid for autocorrelated log-vol
 6. **Supply-chain cross-check** - a hand-curated industry adjacency (direct customer/supplier edges + shared-customer co-exposure) checks whether the financial layer's top edges have a plausible economic rationale, or are noise that happened to survive the placebo test
+7. **Multiplex coupling** - the financial and supply-chain layers are assembled into the supra-adjacency tensor A(i, j, α, t) and tested for coupling: do supply-chain-linked pairs have systematically higher volatility connectedness? (permutation test)
 
-Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_layer.py), [`py_scripts/project2/supply_chain_layer.py`](py_scripts/project2/supply_chain_layer.py); notebook: [`notebooks/TMDN.ipynb`](notebooks/TMDN.ipynb)
+Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_layer.py), [`py_scripts/project2/supply_chain_layer.py`](py_scripts/project2/supply_chain_layer.py), [`py_scripts/project2/multiplex.py`](py_scripts/project2/multiplex.py); notebook: [`notebooks/TMDN.ipynb`](notebooks/TMDN.ipynb)
 
 ## Key findings so far
 
@@ -41,18 +42,20 @@ Code: [`py_scripts/project2/financial_layer.py`](py_scripts/project2/financial_l
 - Structure the math had no way of knowing: the EDA duopoly (Cadence ↔ Synopsys) as the strongest edge, a tight AMAT–LRCX–KLAC equipment cluster, STM → Infineon, and a total connectedness index that peaked (89.5%) in the December 2022 semi bear market
 - Net vol **transmitters** (STM, AMAT, ASX, TER) sit upstream in the supply chain; net **receivers** include INTC and TOELY
 
-**A second layer - supply chain - now exists as a structural cross-check.** `supply_chain_layer.py` encodes the semiconductor industry's known structure (equipment → fab, EDA/test → chip designer, foundry → fabless customer, OSAT → chip company) plus a shared-customer co-exposure view, which explains peer clusters that direct edges miss (AMAT-LRCX-KLAC don't sell to each other; CDNS/SNPS are competitors, not customer/supplier - both pairs move together because they share the same customers). **Caveat:** this layer is currently built from general industry-structure knowledge, not from individually-cited 10-K filings - scraping and verifying each edge against SEC EDGAR filings is planned follow-up work, not yet done. Ownership (13F) remains future work.
+**A second layer - supply chain - exists as both a structural cross-check and a genuine multiplex layer.** `supply_chain_layer.py` encodes the semiconductor industry's known structure (equipment → fab, EDA/test → chip designer, foundry → fabless customer, OSAT → chip company) plus a shared-customer co-exposure view, which explains peer clusters that direct edges miss (AMAT-LRCX-KLAC don't sell to each other; CDNS/SNPS are competitors, not customer/supplier - both pairs move together because they share the same customers). **Caveat:** this layer is currently built from general industry-structure knowledge, not from individually-cited 10-K filings - scraping and verifying each edge against SEC EDGAR filings is planned follow-up work, not yet done. Ownership (13F) remains future work.
+
+**The two layers are coupled - the multiplex is more than the sum of its layers.** `multiplex.py` assembles the supra-adjacency tensor A(i, j, α, t) (financial layer temporal, supply-chain layers static) and tests the headline cross-layer question over *all* pairs: supply-chain-linked pairs have significantly higher volatility connectedness than unlinked pairs (mean θ 0.032 vs 0.030, gap +0.003, permutation p ≈ 0.01 over 5,000 shuffles), and θ rises with the number of shared customers (dose-response corr ≈ +0.28). The data-driven financial network tracks real industry structure, not just statistical co-movement.
 
 The volatility spillover network is the working financial layer of the TMDN.
 
-### Robustness (as of the 2026-07-25 run, data through 2026-07-24)
+### Robustness (as of the 2026-08-01 run, data through 2026-07-31)
 
-Three independent checks, documented in full in the notebook's "Financial Layer Robustness Summary" and "Supply-Chain Rationale & Overall Verdict" sections:
+Four independent checks, documented in full in the notebook's "Financial Layer Robustness Summary", "Supply-Chain Rationale & Overall Verdict", and "Multiplex Tensor & Cross-Layer Coupling" sections:
 
 - **Return null result is decisive, not marginal.** Placebo edge ratio 0.96-0.98 across α ∈ {0.01, 0.02, 0.03, 0.05} - the real return network has *fewer* surviving edges than shuffled noise at every regularization level, plus OOS R² of -0.14 to -0.72.
-- **Vol-layer structure survives a 4×3 hyperparameter grid** (α × FEVD horizon): 9-10/10 top-edge overlap and connectedness confined to 84.0-84.8% everywhere. But the OOS R² delta (HAR-X cross-asset vs. HAR-AR own-lags) is negative at *every* configuration and degrades monotonically with α - the layer adds no forecast lift and should be read as risk-mapping, not prediction.
+- **Vol-layer structure survives a 4×3 hyperparameter grid** (α × FEVD horizon): 9-10/10 top-edge overlap and connectedness confined to 84.0-84.7% everywhere. But the OOS R² delta (HAR-X cross-asset vs. HAR-AR own-lags) is negative at *every* configuration and degrades monotonically with α - the layer adds no forecast lift and should be read as risk-mapping, not prediction.
+- **Vol-layer placebo test now run (previously an open gap).** A per-asset circular-shift null (valid for autocorrelated log-vol, unlike an i.i.d. shuffle) collapses the total connectedness index from a real 80.3% to 18.7% ± 1.7% (real +36.5 sd above the placebo band, non-overlapping), and placebos reproduce only ~0.4/10 of the real top edges. The cross-asset connectedness is real, not an autocorrelation artifact. (Magnitude metrics like coefficient mass/concentration are deliberately *not* used - destroying the common structure spuriously concentrates the placebo FEVD, so they move the "wrong" way; total connectedness is the honest structure-level statistic.)
 - **Supply-chain economic plausibility: 73% hit rate, but indirect.** Of the top-15 vol-spillover edges, 11/15 have a documented rationale, but only 2/15 are direct customer/supplier links - the dominant mechanism is shared-customer co-exposure (peer clusters exposed to the same capex/demand cycle), not commercial linkage. 4/15 edges have no rationale under either view.
-- **Known gap:** no formal placebo-shuffle test has been run on the volatility layer itself, only on returns - flagged explicitly rather than left implied.
 
 ## Repository structure
 
@@ -67,14 +70,16 @@ Three independent checks, documented in full in the notebook's "Financial Layer 
 │   └── project2/
 │       ├── financial_layer.py   # PCA, market-mode removal, asymmetric lead-lag,
 │       │                        #   MP/SVD denoising, har_x_lasso (HAR-X),
-│       │                        #   var_lasso (Sparse VAR(p)),
+│       │                        #   var_lasso (Sparse VAR(p)), circular_shift_placebo,
 │       │                        #   parkinson_log_vol, fevd_connectedness
-│       └── supply_chain_layer.py # hand-curated industry adjacency (direct edges
-│                                #   + shared-customer co-exposure); TODO: verify
-│                                #   each edge against SEC EDGAR 10-K filings
+│       ├── supply_chain_layer.py # hand-curated industry adjacency (direct edges
+│       │                        #   + shared-customer co-exposure); TODO: verify
+│       │                        #   each edge against SEC EDGAR 10-K filings
+│       └── multiplex.py         # supra-adjacency tensor A[i,j,alpha,t] assembly
+│                                #   + cross-layer coupling test (permutation)
 ├── data/                # MST support utilities
 ├── src/                 # entry-point script (Project 1)
-├── tests/               # test_financial_layer.py (pytest, 22 tests on financial_layer.py)
+├── tests/               # test_financial_layer.py + test_multiplex.py (pytest, 34 tests)
 └── PROGRESS.md          # full research log: decisions, pivots, null results, methodology
 ```
 
@@ -131,7 +136,7 @@ jupyter lab notebooks/TMDN.ipynb
 
 ## Methodological notes (read before extending)
 
-- **Every network must pass the placebo test.** Shuffle time order (within sessions for intraday data), refit, and compare - a Lasso will happily produce a sparse "network" from pure noise. The permanent placebo cell in `TMDN.ipynb` is the validity gate for any new configuration.
+- **Every network must pass the placebo test - but match the null to the data.** For returns, an i.i.d. time-shuffle is the right control (returns have ~0 autocorrelation). For volatility it is *not*: log-vol's ~0.40 autocorrelation makes an i.i.d. shuffle trivially beatable, so the vol layer uses a per-asset **circular shift** (preserves own autocorrelation, destroys cross-asset alignment) via `fl.circular_shift_placebo`. And choose the test statistic carefully: for the vol layer, use the **total connectedness index** (structure-level), not coefficient mass/concentration - destroying the common structure spuriously concentrates the placebo FEVD, so magnitude metrics move the wrong way.
 - **Standardize out-of-sample data with training-window statistics.** Standardizing the test segment by its own stats leaks regime information and can mask (or fake) predictive signal.
 - **Symmetric-matrix tools don't transfer to asymmetric matrices.** Eigenvector-transpose reconstruction and Marchenko–Pastur thresholds assume symmetry; the lead-lag matrix requires SVD with the quarter-circle bound s_max = 2·√(N/T) instead (handled automatically in `marchenko_pastur_returns`).
 - **Denoising can destroy the signal you're after.** Hard MP truncation keeps ~1 eigenmode at these T/N ratios, making returns rank-1 - and a rank-1 series has an exactly symmetric lead-lag matrix. Hence residualization (remove the market mode) rather than truncation (keep only the market mode).

@@ -255,3 +255,69 @@ class TestFevdConnectedness:
             summary["NET"].values, (summary["TO"] - summary["FROM"]).values
         )
         assert "total" in summary.attrs
+
+
+# ── har_x_lasso ──────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def standardized_log_vol():
+    """Standardized (zero-mean, unit-var) synthetic log-volatility panel, which
+    is the input contract har_x_lasso expects."""
+    rng = np.random.default_rng(11)
+    T, N = 300, 5
+    idx = pd.date_range("2022-01-03", periods=T, freq="B")
+    cols = list("ABCDE")
+    raw = pd.DataFrame(rng.normal(size=(T, N)), index=idx, columns=cols)
+    return (raw - raw.mean()) / raw.std()
+
+
+class TestHarXLasso:
+    def test_return_contract(self, standardized_log_vol):
+        names = list(standardized_log_vol.columns)
+        N = len(names)
+        har_coefs, var_rep, residuals = fl.har_x_lasso(standardized_log_vol, alpha=0.05)
+
+        assert set(har_coefs.keys()) == {"d", "w", "m"}
+        for block in har_coefs.values():
+            assert block.shape == (N, N)
+            assert list(block.index) == names
+            assert list(block.columns) == names
+
+        assert sorted(var_rep.keys()) == list(range(1, 23))
+        for A in var_rep.values():
+            assert A.shape == (N, N)
+
+        # residuals aligned to the rows that survive the 22-day monthly burn-in
+        assert list(residuals.columns) == names
+        assert residuals.index.equals(standardized_log_vol.index[22:])
+        assert not residuals.isna().any().any()
+
+    def test_var22_reconstruction_identity(self, standardized_log_vol):
+        # The HAR(1,5,22) -> VAR(22) mapping is the core invariant:
+        #   A_1     = Bd + Bw/5 + Bm/22
+        #   A_2..5  = Bw/5 + Bm/22
+        #   A_6..22 = Bm/22
+        har_coefs, var_rep, _ = fl.har_x_lasso(standardized_log_vol, alpha=0.05)
+        Bd, Bw, Bm = har_coefs["d"].values, har_coefs["w"].values, har_coefs["m"].values
+
+        np.testing.assert_allclose(var_rep[1].values, Bd + Bw / 5 + Bm / 22, atol=1e-12)
+        for l in range(2, 6):
+            np.testing.assert_allclose(var_rep[l].values, Bw / 5 + Bm / 22, atol=1e-12)
+        for l in range(6, 23):
+            np.testing.assert_allclose(var_rep[l].values, Bm / 22, atol=1e-12)
+
+    def test_high_alpha_zeroes_all_blocks(self, standardized_log_vol):
+        har_coefs, var_rep, _ = fl.har_x_lasso(standardized_log_vol, alpha=100.0)
+        for block in har_coefs.values():
+            np.testing.assert_allclose(block.values, np.zeros(block.shape))
+        # and therefore every VAR lag is zero too
+        for A in var_rep.values():
+            np.testing.assert_allclose(A.values, np.zeros(A.shape))
+
+    def test_feeds_fevd_connectedness(self, standardized_log_vol):
+        # Integration: the VAR(22) rep + residuals must produce a valid FEVD
+        # table (rows sum to 1) with no reshaping.
+        _, var_rep, residuals = fl.har_x_lasso(standardized_log_vol, alpha=0.05)
+        table, summary = fl.fevd_connectedness(var_rep, residuals, horizon=10)
+        np.testing.assert_allclose(table.sum(axis=1).values, np.ones(table.shape[0]), atol=1e-9)
+        assert "total" in summary.attrs

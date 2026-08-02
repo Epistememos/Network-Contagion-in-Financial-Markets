@@ -164,6 +164,22 @@ Added two new markdown+code sections to the notebook, split by scope after revie
 
 Both sections include a run-timestamp/data-span code cell (`pd.Timestamp.now()`, `total_returns`/`log_vol` index bounds) so the numbers are tied to a known, reproducible data vintage rather than presented as timeless.
 
+### 2026-08-01 - Closed both layer-1 gaps and assembled the multiplex tensor (layer coupling)
+
+Two-part push after deciding the financial layer was "done modulo two flagged gaps" and that the highest-value next step was to actually build the multiplex object the project is named for (it had never existed in code - the two layers were compared but never combined).
+
+**Part A - closed the two financial-layer gaps:**
+- **`har_x_lasso` unit tests**: added `TestHarXLasso` to `tests/test_financial_layer.py` (it was the single untested public function despite being the current workhorse). Tests the HAR(1,5,22)→VAR(22) reconstruction identity (A_1 = Bd+Bw/5+Bm/22, A_2..5 = Bw/5+Bm/22, A_6..22 = Bm/22), the return contract, high-alpha shrinkage, and FEVD integration.
+- **Volatility-layer placebo test** (previously flagged as unrun): added `fl.circular_shift_placebo` and a notebook cell. The return layer's i.i.d. shuffle is invalid for log-vol (~0.40 autocorrelation makes it trivially beatable); a per-asset circular shift preserves each series' own autocorrelation while destroying cross-asset alignment. **Result: total connectedness collapses from real 80.3% to placebo 18.7% ± 1.7% (+36.5 sd, non-overlapping bands), and placebos reproduce only ~0.4/10 of real top edges** - the cross-asset connectedness is real. The robustness summary was updated to report this instead of listing it as a gap.
+  - *Design lesson worth recording:* my first two candidate statistics (coefficient mass, then concentration/max-edge) both moved the "wrong" way - real came out *less* concentrated than placebo. Reason: real semi vol is broadly connected (dense contemporaneous correlation spreads FEV across many assets), so destroying the common structure *spuriously concentrates* the placebo FEVD onto a few random pairs. The honest, structure-level statistic is the **total connectedness index** (real high, placebo low), not any magnitude/concentration metric. Two wrong metrics were tried and discarded before landing on the right one.
+
+**Part B - assembled the multiplex tensor + headline cross-layer result:**
+- New module `py_scripts/project2/multiplex.py`: `build_supra_adjacency` (labelled dict of layers - financial temporal, supply-chain static - not a raw 4-D array, to keep ticker/layer/time labels), `supra_at(t)` for a single-window slice, and `layer_coupling_test`.
+- **Headline result**: generalized the earlier top-15 eyeball check to *all* pairs. Supply-chain-linked pairs (direct edge OR shared-customer co-exposure) have significantly higher volatility connectedness than unlinked pairs: mean θ 0.0324 vs 0.0295, gap +0.0028, **permutation p ≈ 0.010** (5,000 label shuffles; permutation not t-test, because off-diagonal θ entries aren't independent), and a **dose-response** corr(θ, #shared customers) ≈ +0.28. The layers are coupled - the data-driven vol network tracks real industry structure.
+- Notebook section "Multiplex Tensor & Cross-Layer Coupling" with the assembly, the coupling test, and a two-layer overlay (θ-vs-shared-customers scatter + linked/unlinked mean-θ bar). Tests in `tests/test_multiplex.py` (8 tests, incl. constructed-signal-recovered and no-signal-null both directions). Full suite now 34 tests, all green.
+
+Executed end-to-end via nbconvert; data through 2026-07-31, run stamped 2026-08-01. **Both layer-1 gaps are now closed and layer 1 can be considered done.**
+
 ---
 
 ## Standing Methodological Decisions
@@ -183,3 +199,7 @@ Both sections include a run-timestamp/data-span code cell (`pd.Timestamp.now()`,
 | Test genuine mathematical invariants, not the function's own arithmetic | Unit tests re-deriving a function's formula via a different code path (e.g. manual leader-lagger loop) catch real regressions; re-checking the same matrix multiply the function already does would not |
 | Stamp notebook analysis with an execution timestamp and data vintage | Numbers presented without a date/data-range are unreproducible and easy to mistake for current when they're actually stale embedded outputs |
 | Group robustness analysis by the layer it evaluates, not by when it was written | A single end-of-notebook "robustness summary" mixing financial-layer-only and supply-chain findings reads as one blob; readers need financial-layer conclusions right after the financial layer, before a second layer's evidence is introduced |
+| Match the placebo null to the data: circular-shift for autocorrelated vol, i.i.d.-shuffle for returns | An i.i.d. shuffle destroys autocorrelation, so any model using it beats the shuffle trivially and proves nothing; a per-asset circular shift preserves own autocorrelation and destroys only cross-asset alignment - the thing under test |
+| Pick the placebo test statistic to match the phenomenon: total connectedness, not magnitude/concentration, for the vol layer | Destroying the common structure spuriously concentrates the placebo FEVD, so mass/concentration/max-edge move the "wrong" way; the structure-level total connectedness index is the honest discriminator (two wrong statistics were tried and discarded first) |
+| Permutation test, not parametric, for cross-layer coupling | Off-diagonal FEVD entries are not independent (network autocorrelation); shuffling the linkage labels respects the "supply-chain graph is a fixed prior" framing and avoids an optimistic t-test p-value |
+| Represent the supra-adjacency as a labelled dict of layers, not a raw 4-D array | A numpy 4-D tensor loses ticker/layer/time labels; a dict keyed by layer (financial temporal, supply-chain static) keeps the object interpretable and sliceable via `supra_at(t)` |
